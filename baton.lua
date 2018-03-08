@@ -94,7 +94,9 @@ function Player:update()
       elseif joystickSource[type] and self.joystick then
         local v = joystickSource[type](self, value)
         if v > 0 then
-          joystickUsed = true
+          if v >= self.deadzone then
+            joystickUsed = true
+          end
           control.rawValue = control.rawValue + v
           if control.rawValue >= 1 then
             control.rawValue = 1
