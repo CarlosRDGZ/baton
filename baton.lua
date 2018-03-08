@@ -105,8 +105,73 @@ function Player:_isJoystickUsed()
   return false
 end
 
+function Player:_updateControl(controlName)
+  local control = self._controls[controlName]
+
+  -- get raw value
+  control.rawValue = 0
+  for _, s in ipairs(self.controls[controlName]) do
+    local type, value = s:match '(.+):(.+)'
+    if keyboardSource[type] and self._activeDevice == 'keyboard' then
+      if keyboardSource[type](self, value) == 1 then
+        control.rawValue = 1
+        break
+      end
+    elseif joystickSource[type] and self._activeDevice == 'joystick' then
+      control.rawValue = control.rawValue + joystickSource[type](self, value)
+      if control.rawValue >= 1 then
+        control.rawValue = 1
+        break
+      end
+    end
+  end
+
+  -- deadzone
+  control.value = 0
+  if control.rawValue >= self.deadzone then
+    control.value = control.rawValue
+  end
+
+  -- down/pressed/released
+  control.downPrevious = control.down
+  control.down = control.value > 0
+  control.pressed = control.down and not control.downPrevious
+  control.released = control.downPrevious and not control.down
+end
+
+function Player:_updatePair(pairName)
+  local pair = self._pairs[pairName]
+  local p = self.pairs[pairName]
+
+  -- raw value
+  pair.rawX = self._controls[p[2]].rawValue - self._controls[p[1]].rawValue
+  pair.rawY = self._controls[p[4]].rawValue - self._controls[p[3]].rawValue
+
+  -- limit to 1
+  local len = (pair.rawX^2 + pair.rawY^2) ^ .5
+  if len > 1 then
+    pair.rawX, pair.rawY = pair.rawX / len, pair.rawY / len
+  end
+
+  -- deadzone
+  if self.squareDeadzone then
+    pair.x = math.abs(pair.rawX) > self.deadzone and pair.rawX or 0
+    pair.y = math.abs(pair.rawY) > self.deadzone and pair.rawY or 0
+  elseif len > self.deadzone then
+    pair.x, pair.y = pair.rawX, pair.rawY
+  else
+    pair.x, pair.y = 0, 0
+  end
+
+  -- down/pressed/released
+  pair.downPrevious = pair.down
+  pair.down = pair.x ~= 0 or pair.y ~= 0
+  pair.pressed = pair.down and not pair.downPrevious
+  pair.released = pair.downPrevious and not pair.down
+end
+
 function Player:update()
-  -- report active device
+  -- set active device
   if self:_isKeyboardUsed() then
     self._activeDevice = 'keyboard'
   elseif self:_isJoystickUsed() then
@@ -114,67 +179,13 @@ function Player:update()
   end
 
   -- update controls
-  for controlName, control in pairs(self._controls) do
-    -- get raw value
-    control.rawValue = 0
-    for _, s in ipairs(self.controls[controlName]) do
-      local type, value = s:match '(.+):(.+)'
-      if keyboardSource[type] and self._activeDevice == 'keyboard' then
-        if keyboardSource[type](self, value) == 1 then
-          control.rawValue = 1
-          break
-        end
-      elseif joystickSource[type] and self._activeDevice == 'joystick' then
-        control.rawValue = control.rawValue + joystickSource[type](self, value)
-        if control.rawValue >= 1 then
-          control.rawValue = 1
-          break
-        end
-      end
-    end
-
-    -- deadzone
-    control.value = 0
-    if control.rawValue >= self.deadzone then
-      control.value = control.rawValue
-    end
-
-    -- down/pressed/released
-    control.downPrevious = control.down
-    control.down = control.value > 0
-    control.pressed = control.down and not control.downPrevious
-    control.released = control.downPrevious and not control.down
+  for controlName, _ in pairs(self._controls) do
+    self:_updateControl(controlName)
   end
 
   -- update pairs
-  for pairName, pair in pairs(self._pairs) do
-    local p = self.pairs[pairName]
-
-    -- raw value
-    pair.rawX = self._controls[p[2]].rawValue - self._controls[p[1]].rawValue
-    pair.rawY = self._controls[p[4]].rawValue - self._controls[p[3]].rawValue
-
-    -- limit to 1
-    local len = (pair.rawX^2 + pair.rawY^2) ^ .5
-    if len > 1 then
-      pair.rawX, pair.rawY = pair.rawX / len, pair.rawY / len
-    end
-
-    -- deadzone
-    if self.squareDeadzone then
-      pair.x = math.abs(pair.rawX) > self.deadzone and pair.rawX or 0
-      pair.y = math.abs(pair.rawY) > self.deadzone and pair.rawY or 0
-    elseif len > self.deadzone then
-      pair.x, pair.y = pair.rawX, pair.rawY
-    else
-      pair.x, pair.y = 0, 0
-    end
-
-    -- down/pressed/released
-    pair.downPrevious = pair.down
-    pair.down = pair.x ~= 0 or pair.y ~= 0
-    pair.pressed = pair.down and not pair.downPrevious
-    pair.released = pair.downPrevious and not pair.down
+  for pairName, _ in pairs(self._pairs) do
+    self:_updatePair(pairName)
   end
 end
 
