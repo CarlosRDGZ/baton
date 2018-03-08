@@ -47,9 +47,9 @@ function joystickSource:axis(value)
   local axis, direction = value:match '(.+)([%+%-])'
 
   if tonumber(axis) then
-    value = self.joystick:getAxis(tonumber(axis))
+    value = self.config.joystick:getAxis(tonumber(axis))
   else
-    value = self.joystick:getGamepadAxis(axis)
+    value = self.config.joystick:getGamepadAxis(axis)
   end
 
   if direction == '-' then value = -value end
@@ -58,15 +58,15 @@ end
 
 function joystickSource:button(button)
   if tonumber(button) then
-    return self.joystick:isDown(tonumber(button)) and 1 or 0
+    return self.config.joystick:isDown(tonumber(button)) and 1 or 0
   else
-    return self.joystick:isGamepadDown(button) and 1 or 0
+    return self.config.joystick:isGamepadDown(button) and 1 or 0
   end
 end
 
 function joystickSource:hat(value)
   local hat, direction = value:match('(%d)(.+)')
-  if self.joystick:getHat(hat) == direction then
+  if self.config.joystick:getHat(hat) == direction then
       return 1
   end
   return 0
@@ -77,7 +77,7 @@ Player.__index = Player
 
 function Player:_isKeyboardUsed()
   for controlName, control in pairs(self._controls) do
-    for _, s in ipairs(self.controls[controlName]) do
+    for _, s in ipairs(self.config.controls[controlName]) do
       local type, value = s:match '(.+):(.+)'
       if keyboardSource[type] then
         if keyboardSource[type](self, value) == 1 then
@@ -90,12 +90,12 @@ function Player:_isKeyboardUsed()
 end
 
 function Player:_isJoystickUsed()
-  if self.joystick then
+  if self.config.joystick then
     for controlName, control in pairs(self._controls) do
-      for _, s in ipairs(self.controls[controlName]) do
+      for _, s in ipairs(self.config.controls[controlName]) do
         local type, value = s:match '(.+):(.+)'
         if joystickSource[type] then
-          if joystickSource[type](self, value) > self.deadzone then
+          if joystickSource[type](self, value) > self.config.deadzone then
             return true
           end
         end
@@ -110,7 +110,7 @@ function Player:_updateControl(controlName)
 
   -- get raw value
   control.rawValue = 0
-  for _, s in ipairs(self.controls[controlName]) do
+  for _, s in ipairs(self.config.controls[controlName]) do
     local type, value = s:match '(.+):(.+)'
     if keyboardSource[type] and self._activeDevice == 'keyboard' then
       if keyboardSource[type](self, value) == 1 then
@@ -128,7 +128,7 @@ function Player:_updateControl(controlName)
 
   -- deadzone
   control.value = 0
-  if control.rawValue >= self.deadzone then
+  if control.rawValue >= self.config.deadzone then
     control.value = control.rawValue
   end
 
@@ -141,7 +141,7 @@ end
 
 function Player:_updatePair(pairName)
   local pair = self._pairs[pairName]
-  local p = self.pairs[pairName]
+  local p = self.config.pairs[pairName]
 
   -- raw value
   pair.rawX = self._controls[p[2]].rawValue - self._controls[p[1]].rawValue
@@ -154,10 +154,10 @@ function Player:_updatePair(pairName)
   end
 
   -- deadzone
-  if self.squareDeadzone then
-    pair.x = math.abs(pair.rawX) > self.deadzone and pair.rawX or 0
-    pair.y = math.abs(pair.rawY) > self.deadzone and pair.rawY or 0
-  elseif len > self.deadzone then
+  if self.config.squareDeadzone then
+    pair.x = math.abs(pair.rawX) > self.config.deadzone and pair.rawX or 0
+    pair.y = math.abs(pair.rawY) > self.config.deadzone and pair.rawY or 0
+  elseif len > self.config.deadzone then
     pair.x, pair.y = pair.rawX, pair.rawY
   else
     pair.x, pair.y = 0, 0
@@ -231,15 +231,13 @@ end
 
 function baton.new(config)
   if not config.controls then error('No controls defined', 2) end
+  config.deadzone = config.deadzone or .5
+  config.squareDeadzone = config.squareDeadzone or false
 
   local player = setmetatable({
     _controls = {},
     _pairs = {},
-    controls = config.controls,
-    pairs = config.pairs,
-    joystick = config.joystick,
-    deadzone = .5,
-    squareDeadzone = false,
+    config = config,
   }, Player)
 
   for controlName, _ in pairs(config.controls) do
