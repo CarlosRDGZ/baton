@@ -75,9 +75,43 @@ end
 local Player = {}
 Player.__index = Player
 
+function Player:_isKeyboardUsed()
+  for controlName, control in pairs(self._controls) do
+    for _, s in ipairs(self.controls[controlName]) do
+      local type, value = s:match '(.+):(.+)'
+      if keyboardSource[type] then
+        if keyboardSource[type](self, value) == 1 then
+          return true
+        end
+      end
+    end
+  end
+  return false
+end
+
+function Player:_isJoystickUsed()
+  if self.joystick then
+    for controlName, control in pairs(self._controls) do
+      for _, s in ipairs(self.controls[controlName]) do
+        local type, value = s:match '(.+):(.+)'
+        if joystickSource[type] then
+          if joystickSource[type](self, value) > self.deadzone then
+            return true
+          end
+        end
+      end
+    end
+  end
+  return false
+end
+
 function Player:update()
-  local keyboardUsed = false
-  local joystickUsed = false
+  -- report active device
+  if self:_isKeyboardUsed() then
+    self._activeDevice = 'keyboard'
+  elseif self:_isJoystickUsed() then
+    self._activeDevice = 'joystick'
+  end
 
   -- update controls
   for controlName, control in pairs(self._controls) do
@@ -85,23 +119,16 @@ function Player:update()
     control.rawValue = 0
     for _, s in ipairs(self.controls[controlName]) do
       local type, value = s:match '(.+):(.+)'
-      if keyboardSource[type] then
+      if keyboardSource[type] and self._activeDevice == 'keyboard' then
         if keyboardSource[type](self, value) == 1 then
           control.rawValue = 1
-          keyboardUsed = true
           break
         end
-      elseif joystickSource[type] and self.joystick then
-        local v = joystickSource[type](self, value)
-        if v > 0 then
-          if v >= self.deadzone then
-            joystickUsed = true
-          end
-          control.rawValue = control.rawValue + v
-          if control.rawValue >= 1 then
-            control.rawValue = 1
-            break
-          end
+      elseif joystickSource[type] and self._activeDevice == 'joystick' then
+        control.rawValue = control.rawValue + joystickSource[type](self, value)
+        if control.rawValue >= 1 then
+          control.rawValue = 1
+          break
         end
       end
     end
@@ -148,13 +175,6 @@ function Player:update()
     pair.down = pair.x ~= 0 or pair.y ~= 0
     pair.pressed = pair.down and not pair.downPrevious
     pair.released = pair.downPrevious and not pair.down
-  end
-
-  -- report active device
-  if keyboardUsed then
-    self._activeDevice = 'keyboard'
-  elseif joystickUsed then
-    self._activeDevice = 'joystick'
   end
 end
 
